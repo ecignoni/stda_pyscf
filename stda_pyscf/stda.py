@@ -19,8 +19,8 @@ def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
     chg = np.zeros(mol.natm)
     for i, s in enumerate(mol.ao_labels(fmt=None)):
         chg[s[0]] += pop[i]
-    chg = mol.atom_charges() - chg
+    at_chg = mol.atom_charges() - chg
     for ia in range(mol.natm):
         symb = mol.atom_symbol(ia)
-        log.note('charge of  %d%s =   %10.5f', ia, symb, chg[ia])
-    return pop, chg
+        log.note('charge of  %d%s =   %10.5f', ia, symb, at_chg[ia])
+    return pop, at_chg, chg
