@@ -106,4 +106,4 @@ chemical_hardness = {
     " Lr": 5.460699,
 }
 # Trim whitespaces in key values
-chemical_hardness = {k.strip(): v for k, v in chemical_hardness}
+chemical_hardness = {k.strip(): v for k, v in chemical_hardness.items()}
