@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from pyscf.lo import lowdin
 from pyscf.lib import logger
+from .parameters import chemical_hardness
 
 
 def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
@@ -43,3 +44,10 @@ def distance_matrix(mol):
     R_AB = cdist(coords, coords, metric='euclidean')
     return R_AB
 
+
+def hardness_matrix(mol):
+    hrd = chemical_hardness
+    sym = mol.atom_pure_symbol
+    eta = np.array([hrd[sym(a)] for a in range(mol.natm)])
+    eta_AB = (eta[:, np.newaxis] + eta[np.newaxis, :]) / 2
+    return eta_AB
