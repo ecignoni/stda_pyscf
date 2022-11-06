@@ -84,10 +84,11 @@ def get_hybrid_coeff(mf):
     return ax
 
 
-def eri_mo_monopole(mf, alpha=None, beta=None):
+def eri_mo_monopole(mf, alpha=None, beta=None, ax=None):
     mol = mf.mol
     mo_coeff = mf.mo_coeff
-    ax = get_hybrid_coeff(mf)
+    if ax is None:
+        ax = get_hybrid_coeff(mf)
     gam_J = gamma_J(mol, ax, beta)
     gam_K = gamma_K(mol, ax, alpha)
     q = charge_density_monopole(mol, mo_coeff)
@@ -96,7 +97,7 @@ def eri_mo_monopole(mf, alpha=None, beta=None):
     return eri_J, eri_K
 
 
-def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None, alpha=None, beta=None):
+def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None, alpha=None, beta=None, ax=None):
     r"""A and B matrices for sTDA response function.
 
     A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + 2(ia|jb)' - (ij|ab)'
@@ -124,7 +125,7 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None, alpha=None, beta=None
     a = np.diag(e_ia.ravel()).reshape(nocc, nvir, nocc, nvir)
     b = np.zeros_like(a)
 
-    eri_J, eri_K = eri_mo_monopole(mf, alpha, beta)
+    eri_J, eri_K = eri_mo_monopole(mf, alpha, beta, ax)
     a += np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:]) * 2
     a -= np.einsum("ijab->iajb", eri_J[:nocc, :nocc, nocc:, nocc:])
 
