@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from pyscf.lo import lowdin
 from pyscf import lib
+from pyscf import scf
 from .parameters import chemical_hardness, get_alpha_beta
 
 
@@ -67,6 +68,18 @@ def gamma_K(mol, ax):
     alpha, _ = get_alpha_beta(ax)
     gamma = (1.0 / (R**alpha + eta ** (-alpha))) ** (1.0 / alpha)
     return gamma
+
+
+def get_hybrid_coeff(mf):
+    mol = mf.mol
+    if isinstance(mf, scf.hf.KohnShamDFT):
+        ni = mf._numint
+        *_, ax = ni.rsh_and_hybrid_coeff(mf.xc, mol.spin)
+    elif isinstance(mf, scf.hf.RHF):
+        ax = 1.0
+    else:
+        raise NotImplementedError(f'{type(mf)}')
+    return ax
 
 
 def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
