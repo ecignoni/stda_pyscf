@@ -6,7 +6,7 @@ from pyscf import scf
 from .parameters import chemical_hardness, get_alpha_beta
 
 
-#def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
+# def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
 #    log = logger.new_logger(mol, verbose)
 #    s_orth = np.linalg.inv(lowdin(s))
 #    if isinstance(dm, np.ndarray) and dm.ndim == 2:
@@ -41,7 +41,7 @@ def charge_density_monopole(mol, mo_coeff):
 
 
 def distance_matrix(mol):
-    coords = mol.atom_coords(unit='Bohr')
+    coords = mol.atom_coords(unit="Bohr")
     R = cdist(coords, coords, metric="euclidean")
     return R
 
@@ -54,18 +54,20 @@ def hardness_matrix(mol):
     return eta
 
 
-def gamma_J(mol, ax):
+def gamma_J(mol, ax, beta=None):
     R = distance_matrix(mol)
     eta = hardness_matrix(mol)
-    _, beta = get_alpha_beta(ax)
+    if beta is None:
+        _, beta = get_alpha_beta(ax)
     gamma = (1.0 / (R**beta + (ax * eta) ** (-beta))) ** (1.0 / beta)
     return gamma
 
 
-def gamma_K(mol, ax):
+def gamma_K(mol, ax, alpha=None):
     R = distance_matrix(mol)
     eta = hardness_matrix(mol)
-    alpha, _ = get_alpha_beta(ax)
+    if alpha is None:
+        alpha, _ = get_alpha_beta(ax)
     gamma = (1.0 / (R**alpha + eta ** (-alpha))) ** (1.0 / alpha)
     return gamma
 
@@ -78,27 +80,27 @@ def get_hybrid_coeff(mf):
     elif isinstance(mf, scf.hf.RHF):
         ax = 1.0
     else:
-        raise NotImplementedError(f'{type(mf)}')
+        raise NotImplementedError(f"{type(mf)}")
     return ax
 
 
-def eri_mo_monopole(mf):
+def eri_mo_monopole(mf, alpha=None, beta=None):
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     ax = get_hybrid_coeff(mf)
-    gam_J = gamma_J(mol, ax)
-    gam_K = gamma_K(mol, ax)
+    gam_J = gamma_J(mol, ax, beta)
+    gam_K = gamma_K(mol, ax, alpha)
     q = charge_density_monopole(mol, mo_coeff)
-    eri_J = lib.einsum('Apq,AB,Brs->pqrs', q, gam_J, q)
-    eri_K = lib.einsum('Apq,AB,Brs->pqrs', q, gam_K, q)
+    eri_J = lib.einsum("Apq,AB,Brs->pqrs", q, gam_J, q)
+    eri_K = lib.einsum("Apq,AB,Brs->pqrs", q, gam_K, q)
     return eri_J, eri_K
 
 
-def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
-    r'''A and B matrices for sTDA response function.
+def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None, alpha=None, beta=None):
+    r"""A and B matrices for sTDA response function.
 
     A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + 2(ia|jb)' - (ij|ab)'
-    '''
+    """
     if mo_energy is None:
         mo_energy = mf.mo_energy
     if mo_coeff is None:
@@ -109,8 +111,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
 
     mol = mf.mol
     nao, nmo = mo_coeff.shape
-    occidx = np.where(mo_occ==2)[0]
-    viridx = np.where(mo_occ==0)[0]
+    occidx = np.where(mo_occ == 2)[0]
+    viridx = np.where(mo_occ == 0)[0]
     orbv = mo_coeff[:, viridx]
     orbo = mo_coeff[:, occidx]
     nvir = orbv.shape[1]
@@ -118,12 +120,12 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     mo = np.hstack((orbo, orbv))
     nmo = nocc + nvir
 
-    e_ia = lib.direct_sum('a-i->ia', mo_energy[viridx], mo_energy[occidx])
+    e_ia = lib.direct_sum("a-i->ia", mo_energy[viridx], mo_energy[occidx])
     a = np.diag(e_ia.ravel()).reshape(nocc, nvir, nocc, nvir)
     b = np.zeros_like(a)
 
-    eri_J, eri_K = eri_mo_monopole(mf)
-    a += np.einsum('iajb->iajb', eri_K[:nocc, nocc:, :nocc, nocc:]) * 2
-    a -= np.einsum('ijab->iajb', eri_J[:nocc, :nocc, nocc:, nocc:])
+    eri_J, eri_K = eri_mo_monopole(mf, alpha, beta)
+    a += np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:]) * 2
+    a -= np.einsum("ijab->iajb", eri_J[:nocc, :nocc, nocc:, nocc:])
 
     return a, b
