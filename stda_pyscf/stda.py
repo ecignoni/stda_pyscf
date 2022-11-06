@@ -29,7 +29,7 @@ from .parameters import chemical_hardness, get_alpha_beta
 #    return pop, at_chg, chg
 
 
-def charge_density_monopoles(mol, mo_coeff):
+def charge_density_monopole(mol, mo_coeff):
     s = mol.intor_symmetric("int1e_ovlp")
     s_orth = np.linalg.inv(lowdin(s))
     c_orth = np.dot(s_orth, mo_coeff)
@@ -80,6 +80,18 @@ def get_hybrid_coeff(mf):
     else:
         raise NotImplementedError(f'{type(mf)}')
     return ax
+
+
+def eri_mo_monopole(mf):
+    mol = mf.mol
+    mo_coeff = mf.mo_coeff
+    ax = get_hybrid_coeff(mf)
+    gam_J = gamma_J(mol, ax)
+    gam_K = gamma_K(mol, ax)
+    q = charge_density_monopole(mol, mo_coeff)
+    eri_J = lib.einsum('Apq,AB,Brs->pqrs', q, gam_J, q)
+    eri_K = lib.einsum('Apq,AB,Brs->pqrs', q, gam_K, q)
+    return eri_J, eri_K
 
 
 def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
