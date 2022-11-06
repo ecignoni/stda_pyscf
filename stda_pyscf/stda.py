@@ -56,6 +56,14 @@ def hardness_matrix(mol):
 def gamma_J(mol, ax):
     R = distance_matrix(mol)
     eta = hardness_matrix(mol)
-    alpha, beta = get_alpha_beta(ax)
+    _, beta = get_alpha_beta(ax)
     gamma = (1.0 / (R**beta + (ax * eta) ** (-beta))) ** (1.0 / beta)
+    return gamma
+
+
+def gamma_K(mol, ax):
+    R = distance_matrix(mol)
+    eta = hardness_matrix(mol)
+    alpha, _ = get_alpha_beta(ax)
+    gamma = (1.0 / (R**alpha + eta ** (-alpha))) ** (1.0 / alpha)
     return gamma
