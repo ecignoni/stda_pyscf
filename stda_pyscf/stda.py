@@ -1,34 +1,34 @@
 import numpy as np
 from scipy.spatial.distance import cdist
 from pyscf.lo import lowdin
-from pyscf.lib import logger
+from pyscf import lib
 from .parameters import chemical_hardness, get_alpha_beta
 
 
-def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
-    log = logger.new_logger(mol, verbose)
-    s_orth = np.linalg.inv(lowdin(s))
-    if isinstance(dm, np.ndarray) and dm.ndim == 2:
-        pop = np.einsum("qi,ij,jq->q", s_orth, dm, s_orth).real
-    else:
-        pop = np.einsum("qi,ij,jq->q", s_orth, dm[0] + dm[1], s_orth).real
+#def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
+#    log = logger.new_logger(mol, verbose)
+#    s_orth = np.linalg.inv(lowdin(s))
+#    if isinstance(dm, np.ndarray) and dm.ndim == 2:
+#        pop = np.einsum("qi,ij,jq->q", s_orth, dm, s_orth).real
+#    else:
+#        pop = np.einsum("qi,ij,jq->q", s_orth, dm[0] + dm[1], s_orth).real
+#
+#    log.info(" ** Lowdin pop **")
+#    for i, s in enumerate(mol.ao_labels()):
+#        log.info("pop of  %s %10.5f", s, pop[i])
+#
+#    log.note(" ** Lowdin atomic charges **")
+#    chg = np.zeros(mol.natm)
+#    for i, s in enumerate(mol.ao_labels(fmt=None)):
+#        chg[s[0]] += pop[i]
+#    at_chg = mol.atom_charges() - chg
+#    for ia in range(mol.natm):
+#        symb = mol.atom_symbol(ia)
+#        log.note("charge of  %d%s =   %10.5f", ia, symb, at_chg[ia])
+#    return pop, at_chg, chg
 
-    log.info(" ** Lowdin pop **")
-    for i, s in enumerate(mol.ao_labels()):
-        log.info("pop of  %s %10.5f", s, pop[i])
 
-    log.note(" ** Lowdin atomic charges **")
-    chg = np.zeros(mol.natm)
-    for i, s in enumerate(mol.ao_labels(fmt=None)):
-        chg[s[0]] += pop[i]
-    at_chg = mol.atom_charges() - chg
-    for ia in range(mol.natm):
-        symb = mol.atom_symbol(ia)
-        log.note("charge of  %d%s =   %10.5f", ia, symb, at_chg[ia])
-    return pop, at_chg, chg
-
-
-def charge_density_monopoles(mol, mo_coeff, verbose=logger.DEBUG):
+def charge_density_monopoles(mol, mo_coeff):
     s = mol.intor_symmetric("int1e_ovlp")
     s_orth = np.linalg.inv(lowdin(s))
     c_orth = np.dot(s_orth, mo_coeff)
@@ -67,3 +67,36 @@ def gamma_K(mol, ax):
     alpha, _ = get_alpha_beta(ax)
     gamma = (1.0 / (R**alpha + eta ** (-alpha))) ** (1.0 / alpha)
     return gamma
+
+
+def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
+    r'''A and B matrices for sTDA response function.
+
+    A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + 2(ia|jb)' - (ij|ab)'
+    '''
+    if mo_energy is None:
+        mo_energy = mf.mo_energy
+    if mo_coeff is None:
+        mo_coeff = mf.mo_coeff
+    if mo_occ is None:
+        mo_occ = mf.mo_occ
+    assert mo_coeff.dtype == np.double
+
+    mol = mf.mol
+    nao, nmo = mo_coeff.shape
+    occidx = np.where(mo_occ==2)[0]
+    viridx = np.where(mo_occ==0)[0]
+    orbv = mo_coeff[:, viridx]
+    orbo = mo_coeff[:, occidx]
+    nvir = orbv.shape[1]
+    nocc = orbo.shape[1]
+    mo = np.hstack((orbo, orbv))
+    nmo = nocc + nvir
+
+    e_ia = lib.direct_sum('a-i->ia', mo_energy[viridx], mo_energy[occidx])
+    a = np.diag(e_ia.ravel()).reshape(nocc, nvir, nocc, nvir)
+    b = np.zeros_like(a)
+
+    raise NotImplementedError('Missing integrals.')
+
+    return a, b
