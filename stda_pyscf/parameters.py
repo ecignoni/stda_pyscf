@@ -114,4 +114,4 @@ def get_alpha_beta(ax):
     beta2 = 1.83
     alpha1 = 1.42
     alpha2 = 0.48
-    return alpha1 + alpha2*ax, beta1 + beta2*ax
+    return alpha1 + alpha2 * ax, beta1 + beta2 * ax

@@ -2,7 +2,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from pyscf.lo import lowdin
 from pyscf.lib import logger
-from .parameters import chemical_hardness
+from .parameters import chemical_hardness, get_alpha_beta
 
 
 def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
@@ -41,13 +41,21 @@ def charge_density_monopoles(mol, mo_coeff, verbose=logger.DEBUG):
 
 def distance_matrix(mol):
     coords = mol.atom_coords()
-    R_AB = cdist(coords, coords, metric="euclidean")
-    return R_AB
+    R = cdist(coords, coords, metric="euclidean")
+    return R
 
 
 def hardness_matrix(mol):
     hrd = chemical_hardness
     sym = mol.atom_pure_symbol
     eta = np.array([hrd[sym(a)] for a in range(mol.natm)])
-    eta_AB = (eta[:, np.newaxis] + eta[np.newaxis, :]) / 2
-    return eta_AB
+    eta = (eta[:, np.newaxis] + eta[np.newaxis, :]) / 2
+    return eta
+
+
+def gamma_J(mol, ax):
+    R = distance_matrix(mol)
+    eta = hardness_matrix(mol)
+    alpha, beta = get_alpha_beta(ax)
+    gamma = (1.0 / (R**beta + (ax * eta) ** (-beta))) ** (1.0 / beta)
+    return gamma
