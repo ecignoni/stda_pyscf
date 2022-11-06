@@ -59,7 +59,13 @@ def gamma_J(mol, ax, beta=None):
     eta = hardness_matrix(mol)
     if beta is None:
         _, beta = get_alpha_beta(ax)
-    gamma = (1.0 / (R**beta + (ax * eta) ** (-beta))) ** (1.0 / beta)
+    if ax == 0:
+        denom = R**beta
+    else:
+        denom = R**beta + (ax * eta) ** (-beta)
+    gamma = np.divide(1.0, denom, out=np.zeros_like(R), where=denom != 0)
+    gamma = gamma ** (1.0 / beta)
+    # gamma = (1.0 / (R**beta + (ax * eta) ** (-beta))) ** (1.0 / beta)
     return gamma
 
 
@@ -68,7 +74,10 @@ def gamma_K(mol, ax, alpha=None):
     eta = hardness_matrix(mol)
     if alpha is None:
         alpha, _ = get_alpha_beta(ax)
-    gamma = (1.0 / (R**alpha + eta ** (-alpha))) ** (1.0 / alpha)
+    denom = R**alpha + eta ** (-alpha)
+    gamma = np.divide(1.0, denom, out=np.zeros_like(R), where=denom != 0)
+    gamma **= 1.0 / alpha
+    # gamma = (1.0 / (R**alpha + eta ** (-alpha))) ** (1.0 / alpha)
     return gamma
 
 
@@ -97,7 +106,9 @@ def eri_mo_monopole(mf, alpha=None, beta=None, ax=None):
     return eri_J, eri_K
 
 
-def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None, alpha=None, beta=None, ax=None):
+def get_ab(
+    mf, mo_energy=None, mo_coeff=None, mo_occ=None, alpha=None, beta=None, ax=None
+):
     r"""A and B matrices for sTDA response function.
 
     A[i,a,j,b] = \delta_{ab}\delta_{ij}(E_a - E_i) + 2(ia|jb)' - (ij|ab)'
