@@ -1,7 +1,7 @@
 import numpy as np
+from scipy.spatial.distance import cdist
 from pyscf.lo import lowdin
 from pyscf.lib import logger
-
 
 
 def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
@@ -36,3 +36,10 @@ def charge_density_monopoles(mol, mo_coeff, verbose=logger.DEBUG):
     for i, (atidx, *_) in enumerate(mol.ao_labels(fmt=None)):
         q[atidx] += np.einsum('p,q->pq', c_orth[i], c_orth[i]).real
     return q
+
+
+def distance_matrix(mol):
+    coords = mol.atom_coords()
+    R_AB = cdist(coords, coords, metric='euclidean')
+    return R_AB
+
