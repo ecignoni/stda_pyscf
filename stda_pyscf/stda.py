@@ -41,7 +41,7 @@ def charge_density_monopole(mol, mo_coeff):
 
 
 def distance_matrix(mol):
-    coords = mol.atom_coords()
+    coords = mol.atom_coords(unit='Bohr')
     R = cdist(coords, coords, metric="euclidean")
     return R
 
@@ -122,6 +122,8 @@ def get_ab(mf, mo_energy=None, mo_coeff=None, mo_occ=None):
     a = np.diag(e_ia.ravel()).reshape(nocc, nvir, nocc, nvir)
     b = np.zeros_like(a)
 
-    raise NotImplementedError('Missing integrals.')
+    eri_J, eri_K = eri_mo_monopole(mf)
+    a += np.einsum('iajb->iajb', eri_K[:nocc, nocc:, :nocc, nocc:]) * 2
+    a -= np.einsum('ijab->iajb', eri_J[:nocc, :nocc, nocc:, nocc:])
 
     return a, b
