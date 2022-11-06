@@ -107,3 +107,11 @@ chemical_hardness = {
 }
 # Trim whitespaces in key values
 chemical_hardness = {k.strip(): v for k, v in chemical_hardness.items()}
+
+# alpha and beta parameters
+def get_alpha_beta(ax):
+    beta1 = 0.20
+    beta2 = 1.83
+    alpha1 = 1.42
+    alpha2 = 0.48
+    return alpha1 + alpha2*ax, beta1 + beta2*ax
