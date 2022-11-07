@@ -1,0 +1,2 @@
+# After doing (VIM) : %s/\v%u2212/-/g | g/./j4
+awk '{printf "%5s %20.15f %20.15f %20.15f\n", $4, $1, $2, $3}' < $1 > temp ; mv temp $1
