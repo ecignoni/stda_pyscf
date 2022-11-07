@@ -59,12 +59,8 @@ def gamma_J(mol, ax, beta=None):
     eta = hardness_matrix(mol)
     if beta is None:
         _, beta = get_alpha_beta(ax)
-    if ax == 0:
-        denom = R**beta
-    else:
-        denom = R**beta + (ax * eta) ** (-beta)
-    gamma = np.divide(1.0, denom, out=np.zeros_like(R), where=denom != 0)
-    gamma = gamma ** (1.0 / beta)
+    denom = ((R * ax * eta)**beta + 1) ** (1./beta)
+    gamma = ax * eta / denom
     # gamma = (1.0 / (R**beta + (ax * eta) ** (-beta))) ** (1.0 / beta)
     return gamma
 
@@ -74,9 +70,8 @@ def gamma_K(mol, ax, alpha=None):
     eta = hardness_matrix(mol)
     if alpha is None:
         alpha, _ = get_alpha_beta(ax)
-    denom = R**alpha + eta ** (-alpha)
-    gamma = np.divide(1.0, denom, out=np.zeros_like(R), where=denom != 0)
-    gamma **= 1.0 / alpha
+    denom = ((R * eta)**alpha + 1) ** (1./alpha)
+    gamma = eta / denom
     # gamma = (1.0 / (R**alpha + eta ** (-alpha))) ** (1.0 / alpha)
     return gamma
 
