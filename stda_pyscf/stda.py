@@ -93,6 +93,7 @@ def eri_mo_monopole(mf, alpha=None, beta=None, ax=None):
     mo_coeff = mf.mo_coeff
     if ax is None:
         ax = get_hybrid_coeff(mf)
+    print(ax)
     gam_J = gamma_J(mol, ax, beta)
     gam_K = gamma_K(mol, ax, alpha)
     q = charge_density_monopole(mol, mo_coeff)
