@@ -6,6 +6,10 @@ from pyscf import scf
 from .parameters import chemical_hardness, get_alpha_beta
 
 
+# Constants
+AU_TO_EV = 27.211324570273
+
+
 # def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
 #    log = logger.new_logger(mol, verbose)
 #    s_orth = np.linalg.inv(lowdin(s))
@@ -137,3 +141,13 @@ def get_ab(
     a -= np.einsum("ijab->iajb", eri_J[:nocc, :nocc, nocc:, nocc:])
 
     return a, b
+
+
+def direct_diagonalization(a, nstates=3):
+    nocc, nvir, _, _ = a.shape
+    a = a.reshape(nocc*nvir, nocc*nvir)
+    e, v = np.linalg.eig(a)
+    e = np.sort(e[e>0])[:nstates]
+    e *= AU_TO_EV
+    return e
+
