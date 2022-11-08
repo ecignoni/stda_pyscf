@@ -96,16 +96,27 @@ def get_hybrid_coeff(mf):
     return ax
 
 
-def eri_mo_monopole(mf, alpha=None, beta=None, ax=None):
+def eri_mo_monopole(mf, alpha=None, beta=None, ax=None, mode='full'):
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     if ax is None:
         ax = get_hybrid_coeff(mf)
+    if mode != 'stda' and mode != 'full':
+        raise RuntimeError(f"mode is either 'stda' or 'full', given '{mode}'")
     gam_J = gamma_J(mol, ax, beta)
     gam_K = gamma_K(mol, ax, alpha)
-    q = charge_density_monopole(mol, mo_coeff)
-    eri_J = lib.einsum("Apq,AB,Brs->pqrs", q, gam_J, q)
-    eri_K = lib.einsum("Apq,AB,Brs->pqrs", q, gam_K, q)
+    if mode == 'full':
+        q = charge_density_monopole(mol, mo_coeff)
+        eri_J = lib.einsum("Apq,AB,Brs->pqrs", q, gam_J, q)
+        eri_K = lib.einsum("Apq,AB,Brs->pqrs", q, gam_K, q)
+    elif mode == 'stda':
+        occidx = np.where(mf.mo_occ == 2)[0]
+        nocc = len(occidx)
+        q_oo = charge_density_monopole(mol, mo_coeff[:, :nocc], mo_coeff[:, :nocc])
+        q_ov = charge_density_monopole(mol, mo_coeff[:, :nocc], mo_coeff[:, nocc:])
+        q_vv = charge_density_monopole(mol, mo_coeff[:, nocc:], mo_coeff[:, nocc:])
+        eri_J = lib.einsum("Aij,AB,Aab->iajb", q_oo, gam_J, q_vv)
+        eri_K = lib.einsum("Aia,AB,Ajb->iajb", q_ov, gam_K, q_ov)
     return eri_J, eri_K
 
 
