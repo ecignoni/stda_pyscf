@@ -13,26 +13,26 @@ AU_TO_EV = 27.211324570273
 
 
 def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
-   log = logger.new_logger(mol, verbose)
-   s_orth = np.linalg.inv(lowdin(s))
-   if isinstance(dm, np.ndarray) and dm.ndim == 2:
-       pop = np.einsum("qi,ij,jq->q", s_orth, dm, s_orth).real
-   else:
-       pop = np.einsum("qi,ij,jq->q", s_orth, dm[0] + dm[1], s_orth).real
+    log = logger.new_logger(mol, verbose)
+    s_orth = np.linalg.inv(lowdin(s))
+    if isinstance(dm, np.ndarray) and dm.ndim == 2:
+        pop = np.einsum("qi,ij,jq->q", s_orth, dm, s_orth).real
+    else:
+        pop = np.einsum("qi,ij,jq->q", s_orth, dm[0] + dm[1], s_orth).real
 
-   log.info(" ** Lowdin pop **")
-   for i, s in enumerate(mol.ao_labels()):
-       log.info("pop of  %s %10.5f", s, pop[i])
+    log.info(" ** Lowdin pop **")
+    for i, s in enumerate(mol.ao_labels()):
+        log.info("pop of  %s %10.5f", s, pop[i])
 
-   log.note(" ** Lowdin atomic charges **")
-   chg = np.zeros(mol.natm)
-   for i, s in enumerate(mol.ao_labels(fmt=None)):
-       chg[s[0]] += pop[i]
-   at_chg = mol.atom_charges() - chg
-   for ia in range(mol.natm):
-       symb = mol.atom_symbol(ia)
-       log.note("charge of  %d%s =   %10.5f", ia, symb, at_chg[ia])
-   return pop, at_chg, chg
+    log.note(" ** Lowdin atomic charges **")
+    chg = np.zeros(mol.natm)
+    for i, s in enumerate(mol.ao_labels(fmt=None)):
+        chg[s[0]] += pop[i]
+    at_chg = mol.atom_charges() - chg
+    for ia in range(mol.natm):
+        symb = mol.atom_symbol(ia)
+        log.note("charge of  %d%s =   %10.5f", ia, symb, at_chg[ia])
+    return pop, at_chg, chg
 
 
 def charge_density_monopole(mol, mo_coeff, mo_coeff2=None):
@@ -96,27 +96,27 @@ def get_hybrid_coeff(mf):
     return ax
 
 
-def eri_mo_monopole(mf, alpha=None, beta=None, ax=None, mode='full'):
+def eri_mo_monopole(mf, alpha=None, beta=None, ax=None, mode="full"):
     mol = mf.mol
     mo_coeff = mf.mo_coeff
     if ax is None:
         ax = get_hybrid_coeff(mf)
-    if mode != 'stda' and mode != 'full':
+    if mode != "stda" and mode != "full":
         raise RuntimeError(f"mode is either 'stda' or 'full', given '{mode}'")
     gam_J = gamma_J(mol, ax, beta)
     gam_K = gamma_K(mol, ax, alpha)
-    if mode == 'full':
+    if mode == "full":
         q = charge_density_monopole(mol, mo_coeff)
         eri_J = lib.einsum("Apq,AB,Brs->pqrs", q, gam_J, q)
         eri_K = lib.einsum("Apq,AB,Brs->pqrs", q, gam_K, q)
-    elif mode == 'stda':
+    elif mode == "stda":
         occidx = np.where(mf.mo_occ == 2)[0]
         nocc = len(occidx)
         q_oo = charge_density_monopole(mol, mo_coeff[:, :nocc], mo_coeff[:, :nocc])
         q_ov = charge_density_monopole(mol, mo_coeff[:, :nocc], mo_coeff[:, nocc:])
         q_vv = charge_density_monopole(mol, mo_coeff[:, nocc:], mo_coeff[:, nocc:])
-        eri_J = lib.einsum("Aij,AB,Aab->iajb", q_oo, gam_J, q_vv)
-        eri_K = lib.einsum("Aia,AB,Ajb->iajb", q_ov, gam_K, q_ov)
+        eri_J = lib.einsum("Aij,AB,Bab->iajb", q_oo, gam_J, q_vv)
+        eri_K = lib.einsum("Aia,AB,Bjb->iajb", q_ov, gam_K, q_ov)
     return eri_J, eri_K
 
 
@@ -178,7 +178,7 @@ def select_active_space(
         e_ia = lib.direct_sum("a-i->ia", mo_energy[viridx], mo_energy[occidx])
         a = np.diag(e_ia.ravel()).reshape(nocc, nvir, nocc, nvir)
     if eri_J is None or eri_K is None:
-        _eri_J, _eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax)
+        _eri_J, _eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax, mode='full')
         _eri_J = np.einsum("ijab->iajb", _eri_J[:nocc, :nocc, nocc:, nocc:])
         _eri_K = np.einsum("iajb->iajb", _eri_K[:nocc, nocc:, :nocc, nocc:])
         if eri_J is None:
@@ -216,7 +216,7 @@ def get_ab(
     if mo_occ is None:
         mo_occ = mf.mo_occ
     assert mo_coeff.dtype == np.double
-    if mode != 'active' and mode != 'full':
+    if mode != "active" and mode != "full":
         raise RuntimeError(f"mode is either 'full' or 'active', given '{mode}'")
 
     mol = mf.mol
@@ -234,9 +234,9 @@ def get_ab(
     a = np.diag(e_ia.ravel()).reshape(nocc, nvir, nocc, nvir)
     b = np.zeros_like(a)
 
-    eri_J, eri_K = eri_mo_monopole(mf, alpha, beta, ax)
-    eri_J = np.einsum("ijab->iajb", eri_J[:nocc, :nocc, nocc:, nocc:])
-    eri_K = np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:])
+    eri_J, eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax, mode='stda')
+    #eri_J = np.einsum("ijab->iajb", eri_J[:nocc, :nocc, nocc:, nocc:])
+    #eri_K = np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:])
 
     if mode == "full":
         pass
@@ -262,7 +262,7 @@ def direct_diagonalization(a, nstates=3):
     elif a.ndim == 2:
         pass
     else:
-        raise RuntimeError(f'a.ndim={a.ndim} not supported')
+        raise RuntimeError(f"a.ndim={a.ndim} not supported")
     e, v = np.linalg.eig(a)
     e = np.sort(e[e > 0])[:nstates]
     e *= AU_TO_EV
