@@ -35,14 +35,16 @@ def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
    return pop, at_chg, chg
 
 
-def charge_density_monopole(mol, mo_coeff):
+def charge_density_monopole(mol, mo_coeff, mo_coeff2=None):
     s = mol.intor_symmetric("int1e_ovlp")
     s_orth = np.linalg.inv(lowdin(s))
     c_orth = np.dot(s_orth, mo_coeff)
-    nmo = mo_coeff.shape[1]
-    q = np.zeros((mol.natm, nmo, nmo))
+    c_orth2 = np.dot(s_orth, mo_coeff2) if mo_coeff2 is not None else c_orth
+    nmo = c_orth.shape[1]
+    nmo2 = c_orth2.shape[1]
+    q = np.zeros((mol.natm, nmo, nmo2))
     for i, (atidx, *_) in enumerate(mol.ao_labels(fmt=None)):
-        q[atidx] += np.einsum("p,q->pq", c_orth[i], c_orth[i]).real
+        q[atidx] += np.einsum("p,q->pq", c_orth[i], c_orth2[i]).real
     return q
 
 
