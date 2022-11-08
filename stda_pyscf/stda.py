@@ -4,6 +4,7 @@ from pyscf.lo import lowdin
 from pyscf import lib
 from pyscf import scf
 from pyscf import dft
+from pyscf.lib import logger
 from .parameters import chemical_hardness, get_alpha_beta
 
 
@@ -11,27 +12,27 @@ from .parameters import chemical_hardness, get_alpha_beta
 AU_TO_EV = 27.211324570273
 
 
-# def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
-#    log = logger.new_logger(mol, verbose)
-#    s_orth = np.linalg.inv(lowdin(s))
-#    if isinstance(dm, np.ndarray) and dm.ndim == 2:
-#        pop = np.einsum("qi,ij,jq->q", s_orth, dm, s_orth).real
-#    else:
-#        pop = np.einsum("qi,ij,jq->q", s_orth, dm[0] + dm[1], s_orth).real
-#
-#    log.info(" ** Lowdin pop **")
-#    for i, s in enumerate(mol.ao_labels()):
-#        log.info("pop of  %s %10.5f", s, pop[i])
-#
-#    log.note(" ** Lowdin atomic charges **")
-#    chg = np.zeros(mol.natm)
-#    for i, s in enumerate(mol.ao_labels(fmt=None)):
-#        chg[s[0]] += pop[i]
-#    at_chg = mol.atom_charges() - chg
-#    for ia in range(mol.natm):
-#        symb = mol.atom_symbol(ia)
-#        log.note("charge of  %d%s =   %10.5f", ia, symb, at_chg[ia])
-#    return pop, at_chg, chg
+def lowdin_pop(mol, dm, s, verbose=logger.DEBUG):
+   log = logger.new_logger(mol, verbose)
+   s_orth = np.linalg.inv(lowdin(s))
+   if isinstance(dm, np.ndarray) and dm.ndim == 2:
+       pop = np.einsum("qi,ij,jq->q", s_orth, dm, s_orth).real
+   else:
+       pop = np.einsum("qi,ij,jq->q", s_orth, dm[0] + dm[1], s_orth).real
+
+   log.info(" ** Lowdin pop **")
+   for i, s in enumerate(mol.ao_labels()):
+       log.info("pop of  %s %10.5f", s, pop[i])
+
+   log.note(" ** Lowdin atomic charges **")
+   chg = np.zeros(mol.natm)
+   for i, s in enumerate(mol.ao_labels(fmt=None)):
+       chg[s[0]] += pop[i]
+   at_chg = mol.atom_charges() - chg
+   for ia in range(mol.natm):
+       symb = mol.atom_symbol(ia)
+       log.note("charge of  %d%s =   %10.5f", ia, symb, at_chg[ia])
+   return pop, at_chg, chg
 
 
 def charge_density_monopole(mol, mo_coeff):
@@ -140,7 +141,7 @@ def _select_active_space(a, eri_J, eri_K, e_max, tp):
     ncsf = np.concatenate([[divmod(i, nvir)] for i in idx_ncsf])
     # Get perturbative contribution to sum to P-CSF
     e_ncsf = e_perturb[idx_ncsf].sum()
-    return pcsf, e_ncsf
+    return idx_pcsf, pcsf, e_ncsf
 
 
 def select_active_space(
@@ -165,21 +166,30 @@ def select_active_space(
         a = np.diag(e_ia.ravel()).reshape(nocc, nvir, nocc, nvir)
     if eri_J is None or eri_K is None:
         _eri_J, _eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax)
-        _eri_J = np.einsum('ijab->iajb', _eri_J[:nocc, :nocc, nocc:, nocc:])
-        _eri_K = np.einsum('iajb->iajb', _eri_K[:nocc, nocc:, :nocc, nocc:])
+        _eri_J = np.einsum("ijab->iajb", _eri_J[:nocc, :nocc, nocc:, nocc:])
+        _eri_K = np.einsum("iajb->iajb", _eri_K[:nocc, nocc:, :nocc, nocc:])
         if eri_J is None:
             eri_J = _eri_J
         if eri_K is None:
             eri_K = _eri_K
     e_max = e_max / AU_TO_EV
-    pcsf, e_ncsf = _select_active_space(
+    idx_pcsf, pcsf, e_ncsf = _select_active_space(
         a=a, eri_J=eri_J, eri_K=eri_K, e_max=e_max, tp=tp
     )
-    return pcsf, e_ncsf
+    return idx_pcsf, pcsf, e_ncsf
 
 
 def get_ab(
-    mf, mo_energy=None, mo_coeff=None, mo_occ=None, alpha=None, beta=None, ax=None
+    mf,
+    mo_energy=None,
+    mo_coeff=None,
+    mo_occ=None,
+    alpha=None,
+    beta=None,
+    ax=None,
+    e_max=7.0,
+    tp=1e-4,
+    mode="active",
 ):
     r"""A and B matrices for sTDA response function.
 
@@ -193,6 +203,8 @@ def get_ab(
     if mo_occ is None:
         mo_occ = mf.mo_occ
     assert mo_coeff.dtype == np.double
+    if mode != 'active' and mode != 'full':
+        raise RuntimeError(f"mode is either 'full' or 'active', given '{mode}'")
 
     mol = mf.mol
     nao, nmo = mo_coeff.shape
@@ -210,15 +222,34 @@ def get_ab(
     b = np.zeros_like(a)
 
     eri_J, eri_K = eri_mo_monopole(mf, alpha, beta, ax)
-    a += np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:]) * 2
-    a -= np.einsum("ijab->iajb", eri_J[:nocc, :nocc, nocc:, nocc:])
+    eri_J = np.einsum("ijab->iajb", eri_J[:nocc, :nocc, nocc:, nocc:])
+    eri_K = np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:])
+
+    if mode == "full":
+        pass
+    elif mode == "active":
+        idx_pcsf, _, _ = select_active_space(
+            mf, a=a, eri_J=eri_J, eri_K=eri_K, alpha=alpha, beta=beta, ax=ax
+        )
+        pcsf_block = np.ix_(idx_pcsf, idx_pcsf)
+        eri_J = eri_J.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
+        eri_K = eri_K.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
+        a = a.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
+        b = b.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
+
+    a += eri_K * 2 - eri_J
 
     return a, b
 
 
 def direct_diagonalization(a, nstates=3):
-    nocc, nvir, _, _ = a.shape
-    a = a.reshape(nocc * nvir, nocc * nvir)
+    if a.ndim == 4:
+        nocc, nvir, _, _ = a.shape
+        a = a.reshape(nocc * nvir, nocc * nvir)
+    elif a.ndim == 2:
+        pass
+    else:
+        raise RuntimeError(f'a.ndim={a.ndim} not supported')
     e, v = np.linalg.eig(a)
     e = np.sort(e[e > 0])[:nstates]
     e *= AU_TO_EV
