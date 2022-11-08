@@ -178,9 +178,9 @@ def select_active_space(
         e_ia = lib.direct_sum("a-i->ia", mo_energy[viridx], mo_energy[occidx])
         a = np.diag(e_ia.ravel()).reshape(nocc, nvir, nocc, nvir)
     if eri_J is None or eri_K is None:
-        _eri_J, _eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax, mode='full')
-        _eri_J = np.einsum("ijab->iajb", _eri_J[:nocc, :nocc, nocc:, nocc:])
-        _eri_K = np.einsum("iajb->iajb", _eri_K[:nocc, nocc:, :nocc, nocc:])
+        _eri_J, _eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax, mode='stda')
+        #_eri_J = np.einsum("ijab->iajb", _eri_J[:nocc, :nocc, nocc:, nocc:])
+        #_eri_K = np.einsum("iajb->iajb", _eri_K[:nocc, nocc:, :nocc, nocc:])
         if eri_J is None:
             eri_J = _eri_J
         if eri_K is None:
