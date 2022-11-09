@@ -277,11 +277,40 @@ def direct_diagonalization(a, nstates=3):
     return e, v
 
 
+def _contract_multipole(tdobj, ints, hermi=True, xy=None):
+    if xy is None:
+        xy = tdobj.xy
+    mo_coeff = tdobj._scf.mo_coeff
+    mo_occ = tdobj._scf.mo_occ
+    orbo = mo_coeff[:, mo_occ==2]
+    orbv = mo_coeff[:, mo_occ==0]
+    nocc = orbo.shape[1]
+    nvir = orbv.shape[1]
+
+    nstates = len(xy)
+    pol_shape = ints.shape[:-2]
+    nao = ints.shape[-1]
+
+    ints = lib.einsum('xpq,pi,qj->xij', ints.reshape(-1, nao, nao), orbo.conj(), orbv) # [:, nocc, nvir]
+    idx_pcsf = tdobj.idx_pcsf
+    ints = ints.reshape(ints.shape[0], nocc*nvir) # [:, nocc*nvir]
+    ints = ints[:, idx_pcsf] # [:, num P-CSF]
+    pol = np.array([np.einsum('xp,p->x', ints, x)*2 for x, y in xy])
+    if isinstance(xy[0][1], np.ndarray):
+        if hermi:
+            pol += [np.einsum('xp,p->x', ints, y)*2 for x, y in xy]
+        else:
+            pol -= [np.einsum('xp,p->x', ints, y)*2 for x, y in xy]
+    pol = pol.reshape((tdobj.nstates,)+pol_shape)
+    return pol
+
+
 def transition_dipole(tdobj, xy=None):
     '''Transition dipole moments in the length gauge'''
     mol = tdobj.mol
     with mol.with_common_orig(tdscf.rhf._charge_center(mol)):
-        ints = mol.intor_symmetric('int1e_r', comp=3)
+        ints = mol.intor_symmetric('int1e_r', comp=3) # [3, nao, nao]
+    return tdobj._contract_multipole(ints, hermi=True, xy=xy)
 
 
 def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
@@ -354,6 +383,7 @@ class sTDA(TDMixin):
         log.info('e_max = %g (eV), %g (a.u.)', self.e_max, self.e_max / AU_TO_EV)
         log.info('tp = %g (a.u.)', self.tp)
 
+    _contract_multipole = _contract_multipole
     oscillator_strength = oscillator_strength
 
     def kernel(self, nstates=None, mode='active'):
