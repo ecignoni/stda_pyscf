@@ -273,6 +273,14 @@ def direct_diagonalization(a, nstates=3):
 class sTDA(TDMixin):
     '''simplified Tamm-Dancoff approximation
     '''
+    def __init__(self, mf, ax=None, alpha=None, beta=None, e_max=7.5, tp=1e-4):
+        super().__init__(mf)
+        self.ax = ax
+        self.alpha = alpha
+        self.beta = beta
+        self.e_max = e_max
+        self.tp = tp
+
     def gen_vind(self, mf=None):
         '''Generate function to compute Ax'''
         if mf is None:
@@ -284,4 +292,8 @@ class sTDA(TDMixin):
         raise NotImplementedError
 
     def kernel(self, nstates=None):
-        pass
+        '''sTDA diagonalization solver
+        '''
+        cpu0 = (logger.process_clock(), logger.perf_counter())
+        self.check_sanity()
+        self.dump_flags()
