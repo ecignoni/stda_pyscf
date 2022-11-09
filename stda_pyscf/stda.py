@@ -314,6 +314,10 @@ class sTDA(TDMixin):
         if not is_rks and not is_rhf:
             raise NotImplementedError(f'{type(mf)}. Only RKS and RHF are supported')
 
+    def check_singlet(self):
+        if singlet == False:
+            raise NotImplementedError(f'Only singlet excitations are supported.')
+
     def dump_flags(self, verbose=None):
         super().dump_flags(verbose)
         log = logger.new_logger(self, verbose)
@@ -332,5 +336,6 @@ class sTDA(TDMixin):
         '''
         cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_restricted()
+        self.check_singlet()
         self.check_sanity()
         self.dump_flags()
