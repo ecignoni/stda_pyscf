@@ -266,8 +266,8 @@ def direct_diagonalization(a, nstates=3):
         raise RuntimeError(f"a.ndim={a.ndim} not supported")
     e, v = np.linalg.eig(a)
     e = np.sort(e[e > 0])[:nstates]
-    e *= AU_TO_EV
-    return e
+    #e *= AU_TO_EV
+    return e, v
 
 
 class sTDA(TDMixin):
@@ -331,7 +331,7 @@ class sTDA(TDMixin):
         log.info('e_max = %g (eV), %g (a.u.)', self.e_max, self.e_max / AU_TO_EV)
         log.info('tp = %g (a.u.)', self.tp)
 
-    def kernel(self, nstates=None):
+    def kernel(self, nstates=None, mode='active'):
         '''sTDA diagonalization solver
         '''
         cpu0 = (logger.process_clock(), logger.perf_counter())
@@ -339,3 +339,32 @@ class sTDA(TDMixin):
         self.check_singlet()
         self.check_sanity()
         self.dump_flags()
+        if nstates is None:
+            nstates = self.nstates
+        else:
+            self.nstates = nstates
+
+        log = logger.Logger(self.stdout, self.verbose)
+
+        mf = self._scf
+        a, _ = get_ab(mf, alpha=self.alpha, beta=self.beta, ax=self.ax, e_max=self.e_max, tp=self.tp,
+                      mode=mode)
+        self.e, x1 = direct_diagonalization(a, nstates=nstates)
+        self.converged = [True]
+
+        if mode == 'full':
+            nocc = (self._scf.mo_occ>0).sum()
+            nmo = self._scf.mo_occ.size
+            nvir = nmo - nocc
+            # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
+            self.xy = [(xi.reshape(nocc, nvir)*np.sqrt(.5), 0) for xi in x1.T]
+        elif mode == 'active':
+            self.xy = [(xi*np.sqrt(.5), 0) for xi in x1.T]
+
+        if self.chkfile:
+            lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
+            lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
+
+        log.timer('sTDA', *cpu0)
+        self._finalize()
+        return self.e, self.xy
