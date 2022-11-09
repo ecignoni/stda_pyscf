@@ -5,6 +5,7 @@ from pyscf import lib
 from pyscf import scf
 from pyscf import dft
 from pyscf.lib import logger
+from pyscf.tdscf.rhf import TDMixin
 from .parameters import chemical_hardness, get_alpha_beta
 
 
@@ -267,3 +268,20 @@ def direct_diagonalization(a, nstates=3):
     e = np.sort(e[e > 0])[:nstates]
     e *= AU_TO_EV
     return e
+
+
+class sTDA(TDMixin):
+    '''simplified Tamm-Dancoff approximation
+    '''
+    def gen_vind(self, mf=None):
+        '''Generate function to compute Ax'''
+        if mf is None:
+            mf = self._scf
+        # return gen_stda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym)
+        raise NotImplementedError('Davidson diagonalization not supported.')
+
+    def init_guess(self, mf, nstates=None, wfnsym=None):
+        raise NotImplementedError
+
+    def kernel(self, nstates=None):
+        pass
