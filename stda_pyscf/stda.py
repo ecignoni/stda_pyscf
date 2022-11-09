@@ -281,15 +281,44 @@ class sTDA(TDMixin):
         self.e_max = e_max
         self.tp = tp
 
-    def gen_vind(self, mf=None):
-        '''Generate function to compute Ax'''
-        if mf is None:
-            mf = self._scf
-        # return gen_stda_hop(mf, singlet=self.singlet, wfnsym=self.wfnsym)
-        raise NotImplementedError('Davidson diagonalization not supported.')
+    @property
+    def ax(self):
+        return self._ax
 
-    def init_guess(self, mf, nstates=None, wfnsym=None):
-        raise NotImplementedError
+    @ax.setter
+    def ax(self, x):
+        self._ax = get_hybrid_coeff(self._scf) if x is None else x
+
+    @property
+    def alpha(self):
+        return self._alpha
+
+    @alpha.setter
+    def alpha(self, x):
+        assert self.ax is not None
+        self._alpha = get_alpha_beta(self.ax)[0] if x is None else x
+
+    @property
+    def beta(self):
+        return self._beta
+
+    @beta.setter
+    def beta(self, x):
+        assert self.ax is not None
+        self._beta = get_alpha_beta(self.ax)[1] if x is None else x
+
+    def dump_flags(self, verbose=None):
+        super().dump_flags(verbose)
+        log = logger.new_logger(self, verbose)
+        log.info('Davidson diagonalization currently not supported by sTDA.')
+        log.info("'conv_tol', 'eigh lindep', 'eigh level_shift', 'eigh max_space'. and 'eigh max_cycle' currently not used.")
+        log.info('')
+        log.info('******** sTDA specific parameters ********')
+        log.info('ax = %s', self.ax)
+        log.info('alpha = %s', self.alpha)
+        log.info('beta = %s', self.beta)
+        log.info('e_max = %g (eV), %g (a.u.)', self.e_max, self.e_max / AU_TO_EV)
+        log.info('tp = %g (a.u.)', self.tp)
 
     def kernel(self, nstates=None):
         '''sTDA diagonalization solver
