@@ -315,7 +315,7 @@ class sTDA(TDMixin):
             raise NotImplementedError(f'{type(mf)}. Only RKS and RHF are supported')
 
     def check_singlet(self):
-        if singlet == False:
+        if self.singlet == False:
             raise NotImplementedError(f'Only singlet excitations are supported.')
 
     def dump_flags(self, verbose=None):
