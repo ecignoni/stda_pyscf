@@ -241,7 +241,9 @@ def get_ab(
     # eri_K = np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:])
 
     if mode == "full":
-        pass
+        idx_pcsf = None
+        pcsf = None
+        e_ncsf = None
     elif mode == "active":
         idx_pcsf, pcsf, e_ncsf = select_active_space(
             mf, a=a, eri_J=eri_J, eri_K=eri_K, alpha=alpha, beta=beta, ax=ax
@@ -255,7 +257,7 @@ def get_ab(
 
     a += eri_K * 2 - eri_J
 
-    return a, b
+    return a, b, (idx_pcsf, pcsf, e_ncsf)
 
 
 def direct_diagonalization(a, nstates=3):
@@ -371,8 +373,11 @@ class sTDA(TDMixin):
         log = logger.Logger(self.stdout, self.verbose)
 
         mf = self._scf
-        a, _ = get_ab(mf, alpha=self.alpha, beta=self.beta, ax=self.ax, e_max=self.e_max, tp=self.tp,
+        a, _, active_space = get_ab(mf, alpha=self.alpha, beta=self.beta, ax=self.ax, e_max=self.e_max, tp=self.tp,
                       mode=mode)
+        self.idx_pcsf = active_space[0]
+        self.pcsf = active_space[1]
+        self.e_ncsf = active_space[2]
         self.e, x1 = direct_diagonalization(a, nstates=nstates)
         self.converged = [True]
 
