@@ -313,6 +313,8 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     elif tdobj.mode == 'active':
         # x is [num_PCSF], use different contraction method
         return _contract_multipole_active(tdobj, ints, hermi=hermi, xy=xy)
+    else:
+        raise RuntimeError(f"mode is either 'full' or 'active', given {mode}")
 
 
 class sTDA(TDMixin):
