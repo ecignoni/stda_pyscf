@@ -1,3 +1,4 @@
+import itertools
 import numpy as np
 from scipy.spatial.distance import cdist
 from pyscf.lo import lowdin
@@ -241,9 +242,9 @@ def get_ab(
     # eri_K = np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:])
 
     if mode == "full":
-        idx_pcsf = None
-        pcsf = None
-        e_ncsf = None
+        idx_pcsf = np.arange(nocc*nvir)
+        pcsf = np.array(list(itertools.product(np.arange(nocc), np.arange(nvir))))
+        e_ncsf = 0
     elif mode == "active":
         idx_pcsf, pcsf, e_ncsf = select_active_space(
             mf, a=a, eri_J=eri_J, eri_K=eri_K, alpha=alpha, beta=beta, ax=ax
@@ -269,15 +270,16 @@ def direct_diagonalization(a, nstates=3):
     else:
         raise RuntimeError(f"a.ndim={a.ndim} not supported")
     e, v = np.linalg.eig(a)
-    mask = e > 0
-    idx = np.argsort(e[mask])
-    e = e[mask][idx][:nstates]
-    v = v[:, mask][:, idx][:, :nstates]
+    # trick to get `idx` of same length of e
+    e[e < 0] = np.infty
+    idx = np.argsort(e)
+    e = e[idx][:nstates]
+    v = v[:, idx][:, :nstates]
     #e *= AU_TO_EV
     return e, v
 
 
-def _contract_multipole(tdobj, ints, hermi=True, xy=None):
+def _contract_multipole_active(tdobj, ints, hermi=True, xy=None):
     if xy is None:
         xy = tdobj.xy
     mo_coeff = tdobj._scf.mo_coeff
@@ -292,9 +294,8 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     nao = ints.shape[-1]
 
     ints = lib.einsum('xpq,pi,qj->xij', ints.reshape(-1, nao, nao), orbo.conj(), orbv) # [:, nocc, nvir]
-    idx_pcsf = tdobj.idx_pcsf
     ints = ints.reshape(ints.shape[0], nocc*nvir) # [:, nocc*nvir]
-    ints = ints[:, idx_pcsf] # [:, num P-CSF]
+    ints = ints[:, tdobj.idx_pcsf] # [:, num P-CSF]
     pol = np.array([np.einsum('xp,p->x', ints, x)*2 for x, y in xy])
     if isinstance(xy[0][1], np.ndarray):
         if hermi:
@@ -305,21 +306,13 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     return pol
 
 
-def transition_dipole(tdobj, xy=None):
-    '''Transition dipole moments in the length gauge'''
-    mol = tdobj.mol
-    with mol.with_common_orig(tdscf.rhf._charge_center(mol)):
-        ints = mol.intor_symmetric('int1e_r', comp=3) # [3, nao, nao]
-    return tdobj._contract_multipole(ints, hermi=True, xy=xy)
-
-
-def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
+def _contract_multipole(tdobj, ints, hermi=True, xy=None):
     if tdobj.mode == 'full':
-        return tdscf.rhf.oscillator_strength(tdobj, e=e, xy=xy, gauge=gauge, order=order)
+        # xy is in the same format of pyscf: delegate
+        return tddft.rhf._contract_multipole(tdobj, ints, hermi=hermi, xy=xy)
     elif tdobj.mode == 'active':
-        raise NotImplementedError
-    else:
-        raise RuntimeError(f'{tdobj.mode}')
+        # x is [num_PCSF], use different contraction method
+        return _contract_multipole_active(tdobj, ints, hermi=hermi, xy=xy)
 
 
 class sTDA(TDMixin):
@@ -384,7 +377,6 @@ class sTDA(TDMixin):
         log.info('tp = %g (a.u.)', self.tp)
 
     _contract_multipole = _contract_multipole
-    oscillator_strength = oscillator_strength
 
     def kernel(self, nstates=None, mode='active'):
         '''sTDA diagonalization solver
@@ -423,6 +415,10 @@ class sTDA(TDMixin):
         if self.chkfile:
             lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
             lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
+
+        # Remove me
+        self.mode = 'active'
+        self.xy = [(x.reshape(-1), 0) for x, y in self.xy]
 
         log.timer('sTDA', *cpu0)
         self._finalize()
