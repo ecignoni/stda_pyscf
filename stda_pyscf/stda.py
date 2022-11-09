@@ -307,6 +307,13 @@ class sTDA(TDMixin):
         assert self.ax is not None
         self._beta = get_alpha_beta(self.ax)[1] if x is None else x
 
+    def check_restricted(self):
+        mf = self._scf
+        is_rks = isinstance(mf, dft.rks.RKS)
+        is_rhf = isinstance(mf, scf.hf.RHF)
+        if not is_rks and not is_rhf:
+            raise NotImplementedError(f'{type(mf)}. Only RKS and RHF are supported')
+
     def dump_flags(self, verbose=None):
         super().dump_flags(verbose)
         log = logger.new_logger(self, verbose)
@@ -324,5 +331,6 @@ class sTDA(TDMixin):
         '''sTDA diagonalization solver
         '''
         cpu0 = (logger.process_clock(), logger.perf_counter())
+        self.check_restricted()
         self.check_sanity()
         self.dump_flags()
