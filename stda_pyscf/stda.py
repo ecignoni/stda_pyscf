@@ -5,6 +5,7 @@ from pyscf import lib
 from pyscf import scf
 from pyscf import dft
 from pyscf.lib import logger
+from pyscf import tdscf
 from pyscf.tdscf.rhf import TDMixin
 from .parameters import chemical_hardness, get_alpha_beta
 
@@ -273,6 +274,15 @@ def direct_diagonalization(a, nstates=3):
     return e, v
 
 
+def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
+    if tdobj.mode == 'full':
+        return tdscf.rhf.oscillator_strength(tdobj, e=e, xy=xy, gauge=gauge, order=order)
+    elif tdobj.mode == 'active':
+        raise NotImplementedError
+    else:
+        raise RuntimeError(f'{tdobj.mode}')
+
+
 class sTDA(TDMixin):
     '''simplified Tamm-Dancoff approximation
     '''
@@ -334,6 +344,8 @@ class sTDA(TDMixin):
         log.info('e_max = %g (eV), %g (a.u.)', self.e_max, self.e_max / AU_TO_EV)
         log.info('tp = %g (a.u.)', self.tp)
 
+    oscillator_strength = oscillator_strength
+
     def kernel(self, nstates=None, mode='active'):
         '''sTDA diagonalization solver
         '''
@@ -346,6 +358,7 @@ class sTDA(TDMixin):
             nstates = self.nstates
         else:
             self.nstates = nstates
+        self.mode = mode
 
         log = logger.Logger(self.stdout, self.verbose)
 
