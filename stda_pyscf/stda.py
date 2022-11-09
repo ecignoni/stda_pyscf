@@ -242,7 +242,7 @@ def get_ab(
     # eri_K = np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:])
 
     if mode == "full":
-        idx_pcsf = np.arange(nocc*nvir)
+        idx_pcsf = np.arange(nocc * nvir)
         pcsf = np.array(list(itertools.product(np.arange(nocc), np.arange(nvir))))
         e_ncsf = 0
     elif mode == "active":
@@ -275,7 +275,7 @@ def direct_diagonalization(a, nstates=3):
     idx = np.argsort(e)
     e = e[idx][:nstates]
     v = v[:, idx][:, :nstates]
-    #e *= AU_TO_EV
+    # e *= AU_TO_EV
     return e, v
 
 
@@ -284,8 +284,8 @@ def _contract_multipole_active(tdobj, ints, hermi=True, xy=None):
         xy = tdobj.xy
     mo_coeff = tdobj._scf.mo_coeff
     mo_occ = tdobj._scf.mo_occ
-    orbo = mo_coeff[:, mo_occ==2]
-    orbv = mo_coeff[:, mo_occ==0]
+    orbo = mo_coeff[:, mo_occ == 2]
+    orbv = mo_coeff[:, mo_occ == 0]
     nocc = orbo.shape[1]
     nvir = orbv.shape[1]
 
@@ -293,24 +293,26 @@ def _contract_multipole_active(tdobj, ints, hermi=True, xy=None):
     pol_shape = ints.shape[:-2]
     nao = ints.shape[-1]
 
-    ints = lib.einsum('xpq,pi,qj->xij', ints.reshape(-1, nao, nao), orbo.conj(), orbv) # [:, nocc, nvir]
-    ints = ints.reshape(ints.shape[0], nocc*nvir) # [:, nocc*nvir]
-    ints = ints[:, tdobj.idx_pcsf] # [:, num P-CSF]
-    pol = np.array([np.einsum('xp,p->x', ints, x)*2 for x, y in xy])
+    ints = lib.einsum(
+        "xpq,pi,qj->xij", ints.reshape(-1, nao, nao), orbo.conj(), orbv
+    )  # [:, nocc, nvir]
+    ints = ints.reshape(ints.shape[0], nocc * nvir)  # [:, nocc*nvir]
+    ints = ints[:, tdobj.idx_pcsf]  # [:, num P-CSF]
+    pol = np.array([np.einsum("xp,p->x", ints, x) * 2 for x, y in xy])
     if isinstance(xy[0][1], np.ndarray):
         if hermi:
-            pol += [np.einsum('xp,p->x', ints, y)*2 for x, y in xy]
+            pol += [np.einsum("xp,p->x", ints, y) * 2 for x, y in xy]
         else:
-            pol -= [np.einsum('xp,p->x', ints, y)*2 for x, y in xy]
-    pol = pol.reshape((tdobj.nstates,)+pol_shape)
+            pol -= [np.einsum("xp,p->x", ints, y) * 2 for x, y in xy]
+    pol = pol.reshape((tdobj.nstates,) + pol_shape)
     return pol
 
 
 def _contract_multipole(tdobj, ints, hermi=True, xy=None):
-    if tdobj.mode == 'full':
+    if tdobj.mode == "full":
         # xy is in the same format of pyscf: delegate
-        return tddft.rhf._contract_multipole(tdobj, ints, hermi=hermi, xy=xy)
-    elif tdobj.mode == 'active':
+        return tdscf.rhf._contract_multipole(tdobj, ints, hermi=hermi, xy=xy)
+    elif tdobj.mode == "active":
         # x is [num_PCSF], use different contraction method
         return _contract_multipole_active(tdobj, ints, hermi=hermi, xy=xy)
     else:
@@ -318,8 +320,8 @@ def _contract_multipole(tdobj, ints, hermi=True, xy=None):
 
 
 class sTDA(TDMixin):
-    '''simplified Tamm-Dancoff approximation
-    '''
+    """simplified Tamm-Dancoff approximation"""
+
     def __init__(self, mf, ax=None, alpha=None, beta=None, e_max=7.5, tp=1e-4):
         super().__init__(mf)
         self.ax = ax
@@ -359,30 +361,31 @@ class sTDA(TDMixin):
         is_rks = isinstance(mf, dft.rks.RKS)
         is_rhf = isinstance(mf, scf.hf.RHF)
         if not is_rks and not is_rhf:
-            raise NotImplementedError(f'{type(mf)}. Only RKS and RHF are supported')
+            raise NotImplementedError(f"{type(mf)}. Only RKS and RHF are supported")
 
     def check_singlet(self):
         if self.singlet == False:
-            raise NotImplementedError(f'Only singlet excitations are supported.')
+            raise NotImplementedError(f"Only singlet excitations are supported.")
 
     def dump_flags(self, verbose=None):
         super().dump_flags(verbose)
         log = logger.new_logger(self, verbose)
-        log.info('Davidson diagonalization currently not supported by sTDA.')
-        log.info("'conv_tol', 'eigh lindep', 'eigh level_shift', 'eigh max_space'. and 'eigh max_cycle' currently not used.")
-        log.info('')
-        log.info('******** sTDA specific parameters ********')
-        log.info('ax = %s', self.ax)
-        log.info('alpha = %s', self.alpha)
-        log.info('beta = %s', self.beta)
-        log.info('e_max = %g (eV), %g (a.u.)', self.e_max, self.e_max / AU_TO_EV)
-        log.info('tp = %g (a.u.)', self.tp)
+        log.info("Davidson diagonalization currently not supported by sTDA.")
+        log.info(
+            "'conv_tol', 'eigh lindep', 'eigh level_shift', 'eigh max_space'. and 'eigh max_cycle' currently not used."
+        )
+        log.info("")
+        log.info("******** sTDA specific parameters ********")
+        log.info("ax = %s", self.ax)
+        log.info("alpha = %s", self.alpha)
+        log.info("beta = %s", self.beta)
+        log.info("e_max = %g (eV), %g (a.u.)", self.e_max, self.e_max / AU_TO_EV)
+        log.info("tp = %g (a.u.)", self.tp)
 
     _contract_multipole = _contract_multipole
 
-    def kernel(self, nstates=None, mode='active'):
-        '''sTDA diagonalization solver
-        '''
+    def kernel(self, nstates=None, mode="active"):
+        """sTDA diagonalization solver"""
         cpu0 = (logger.process_clock(), logger.perf_counter())
         self.check_restricted()
         self.check_singlet()
@@ -397,31 +400,40 @@ class sTDA(TDMixin):
         log = logger.Logger(self.stdout, self.verbose)
 
         mf = self._scf
-        a, _, active_space = get_ab(mf, alpha=self.alpha, beta=self.beta, ax=self.ax, e_max=self.e_max, tp=self.tp,
-                      mode=mode)
+        a, _, active_space = get_ab(
+            mf,
+            alpha=self.alpha,
+            beta=self.beta,
+            ax=self.ax,
+            e_max=self.e_max,
+            tp=self.tp,
+            mode=mode,
+        )
         self.idx_pcsf = active_space[0]
         self.pcsf = active_space[1]
         self.e_ncsf = active_space[2]
         self.e, x1 = direct_diagonalization(a, nstates=nstates)
         self.converged = [True]
 
-        if mode == 'full':
-            nocc = (self._scf.mo_occ>0).sum()
+        if mode == "full":
+            nocc = (self._scf.mo_occ > 0).sum()
             nmo = self._scf.mo_occ.size
             nvir = nmo - nocc
             # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
-            self.xy = [(xi.reshape(nocc, nvir)*np.sqrt(.5), 0) for xi in x1.T]
-        elif mode == 'active':
-            self.xy = [(xi*np.sqrt(.5), 0) for xi in x1.T]
+            self.xy = [(xi.reshape(nocc, nvir) * np.sqrt(0.5), 0) for xi in x1.T]
+        elif mode == "active":
+            self.xy = [(xi * np.sqrt(0.5), 0) for xi in x1.T]
+            # Maybe it's better if __here__ you transform xi as shape (occ, vir), and use PySCF
+            # functions directly
 
         if self.chkfile:
-            lib.chkfile.save(self.chkfile, 'tddft/e', self.e)
-            lib.chkfile.save(self.chkfile, 'tddft/xy', self.xy)
+            lib.chkfile.save(self.chkfile, "tddft/e", self.e)
+            lib.chkfile.save(self.chkfile, "tddft/xy", self.xy)
 
-        # Remove me
-        self.mode = 'active'
-        self.xy = [(x.reshape(-1), 0) for x, y in self.xy]
+        ## Remove me
+        # self.mode = 'active'
+        # self.xy = [(x.reshape(-1), 0) for x, y in self.xy]
 
-        log.timer('sTDA', *cpu0)
+        log.timer("sTDA", *cpu0)
         self._finalize()
         return self.e, self.xy
