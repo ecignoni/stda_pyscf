@@ -265,7 +265,10 @@ def direct_diagonalization(a, nstates=3):
     else:
         raise RuntimeError(f"a.ndim={a.ndim} not supported")
     e, v = np.linalg.eig(a)
-    e = np.sort(e[e > 0])[:nstates]
+    mask = e > 0
+    idx = np.argsort(e[mask])
+    e = e[mask][idx][:nstates]
+    v = v[:, mask][:, idx][:, :nstates]
     #e *= AU_TO_EV
     return e, v
 
