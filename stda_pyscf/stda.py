@@ -243,7 +243,7 @@ def get_ab(
     if mode == "full":
         pass
     elif mode == "active":
-        idx_pcsf, _, _ = select_active_space(
+        idx_pcsf, pcsf, e_ncsf = select_active_space(
             mf, a=a, eri_J=eri_J, eri_K=eri_K, alpha=alpha, beta=beta, ax=ax
         )
         pcsf_block = np.ix_(idx_pcsf, idx_pcsf)
@@ -251,6 +251,7 @@ def get_ab(
         eri_K = eri_K.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
         a = a.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
         b = b.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
+        a[np.diag_indices_from(a)] += e_ncsf
 
     a += eri_K * 2 - eri_J
 
@@ -272,6 +273,13 @@ def direct_diagonalization(a, nstates=3):
     v = v[:, mask][:, idx][:, :nstates]
     #e *= AU_TO_EV
     return e, v
+
+
+def transition_dipole(tdobj, xy=None):
+    '''Transition dipole moments in the length gauge'''
+    mol = tdobj.mol
+    with mol.with_common_orig(tdscf.rhf._charge_center(mol)):
+        ints = mol.intor_symmetric('int1e_r', comp=3)
 
 
 def oscillator_strength(tdobj, e=None, xy=None, gauge='length', order=0):
