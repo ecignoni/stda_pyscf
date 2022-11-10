@@ -125,39 +125,46 @@ def eri_mo_monopole(mf, alpha=None, beta=None, ax=None, mode="full"):
 
 def _select_active_space(a, eri_J, eri_K, e_max, tp):
     nocc, nvir, _, _ = a.shape
+
     # (1) select the CSFs by energy
     # E_u = A_ia,ia = (e_a - e_i) + 2*(ia|ia) - (ii|aa) ; u = ia
     diag_a = np.diag(a.reshape(nocc * nvir, nocc * nvir)).copy()
     diag_a += np.einsum("iaia->ia", eri_K).reshape(-1) * 2
     diag_a -= np.einsum("iaia->ia", eri_J).reshape(-1)
+
     # Select P-CSF and N-CSF
     idx_pcsf = np.where(diag_a <= e_max)[0]
     idx_ncsf = np.where(diag_a > e_max)[0]
     pcsf = np.concatenate([[divmod(i, nvir)] for i in idx_pcsf])
-    ncsf = np.concatenate([[divmod(i, nvir)] for i in idx_ncsf])
+
     # (2) select the S-CSFs by perturbation
     eri_J = eri_J[:, :, pcsf[:, 0], pcsf[:, 1]].reshape(nocc * nvir, pcsf.shape[0])
     eri_K = eri_K[:, :, pcsf[:, 0], pcsf[:, 1]].reshape(nocc * nvir, pcsf.shape[0])
-    a_uv = 2 * eri_K - eri_J
-    denom = diag_a[:, None] - diag_a[idx_pcsf]
-    # P-CSF have e_perturb = np.infty
-    e_perturb = np.sum(
-        np.divide(
-            np.abs(a_uv) ** 2,
-            denom,
-            out=np.full(a_uv.shape, np.infty),
-            where=denom != 0,
-        ),
-        axis=1,
+    a_uv = 2 * eri_K[idx_ncsf] - eri_J[idx_ncsf]
+    denom = diag_a[idx_ncsf, None] - diag_a[idx_pcsf]
+    e_pt = np.divide(
+        np.abs(a_uv) ** 2,
+        denom,
     )
-    # P-CSF + S-CSF
-    idx_pcsf = np.where(e_perturb >= tp)[0]
-    idx_ncsf = np.where(e_perturb < tp)[0]
-    pcsf = np.concatenate([[divmod(i, nvir)] for i in idx_pcsf])
+    e_u = np.sum(e_pt, axis=1)
+
+    # S-CSF and N-CSF
+    idx_scsf = idx_ncsf[e_u >= tp]
+    idx_ncsf = idx_ncsf[e_u < tp]
+    scsf = np.concatenate([[divmod(i, nvir)] for i in idx_scsf])
     ncsf = np.concatenate([[divmod(i, nvir)] for i in idx_ncsf])
-    # Get perturbative contribution to sum to P-CSF
-    e_ncsf = e_perturb[idx_ncsf].sum()
-    return idx_pcsf, pcsf, e_ncsf
+
+    # (3) Get perturbative contribution to sum to P-CSF
+    a_uv = 2 * eri_K[idx_ncsf] - eri_J[idx_ncsf]
+    denom = denom[e_u<tp]
+    e_pt = np.divide(
+        np.abs(a_uv) ** 2,
+        denom,
+    )
+    # This is a stabilizing contrib.
+    e_ncsf = -np.sum(e_pt, axis=0)
+
+    return idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf
 
 
 def select_active_space(
@@ -176,23 +183,23 @@ def select_active_space(
         mo_occ = mf.mo_occ
         occidx = np.where(mo_occ == 2)[0]
         viridx = np.where(mo_occ == 0)[0]
-        nocc = len(occidx)
-        nvir = len(viridx)
         e_ia = lib.direct_sum("a-i->ia", mo_energy[viridx], mo_energy[occidx])
         a = np.diag(e_ia.ravel()).reshape(nocc, nvir, nocc, nvir)
+
     if eri_J is None or eri_K is None:
         _eri_J, _eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax, mode="stda")
-        # _eri_J = np.einsum("ijab->iajb", _eri_J[:nocc, :nocc, nocc:, nocc:])
-        # _eri_K = np.einsum("iajb->iajb", _eri_K[:nocc, nocc:, :nocc, nocc:])
         if eri_J is None:
             eri_J = _eri_J
         if eri_K is None:
             eri_K = _eri_K
+
     e_max = e_max / AU_TO_EV
-    idx_pcsf, pcsf, e_ncsf = _select_active_space(
+
+    idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf = _select_active_space(
         a=a, eri_J=eri_J, eri_K=eri_K, e_max=e_max, tp=tp
     )
-    return idx_pcsf, pcsf, e_ncsf
+
+    return idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf
 
 
 def get_ab(
@@ -238,15 +245,25 @@ def get_ab(
     b = np.zeros_like(a)
 
     eri_J, eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax, mode="stda")
-    # eri_J = np.einsum("ijab->iajb", eri_J[:nocc, :nocc, nocc:, nocc:])
-    # eri_K = np.einsum("iajb->iajb", eri_K[:nocc, nocc:, :nocc, nocc:])
+
+    ## TEST BENZENE
+    #mask_occ = np.where(mo_energy[occidx]>(-23.0707)/AU_TO_EV)[0]
+    #mask_vir = np.where(mo_energy[viridx]<16.4279/AU_TO_EV)[0]
+    #nocc = len(mask_occ)
+    #nvir = len(mask_vir)
+    #a = a[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
+    #b = b[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
+    #eri_J = eri_J[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
+    #eri_K = eri_K[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
 
     if mode == "full":
         idx_pcsf = np.arange(nocc * nvir)
-        pcsf = np.array(list(itertools.product(np.arange(nocc), np.arange(nvir))))
+        idx_scsf = None
+        idx_ncsf = None
         e_ncsf = 0
+
     elif mode == "active":
-        idx_pcsf, pcsf, e_ncsf = select_active_space(
+        idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf = select_active_space(
             mf,
             a=a,
             eri_J=eri_J,
@@ -257,16 +274,23 @@ def get_ab(
             e_max=e_max,
             tp=tp,
         )
-        pcsf_block = np.ix_(idx_pcsf, idx_pcsf)
-        eri_J = eri_J.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
-        eri_K = eri_K.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
-        a = a.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
-        b = b.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
-        a[np.diag_indices_from(a)] += e_ncsf
+
+        # Reconstruct A, B in the set of active CSFs
+        idx_active = np.concatenate((idx_pcsf, idx_scsf))
+        active_block = np.ix_(idx_active, idx_active)
+
+        eri_J = eri_J.reshape(nocc * nvir, nocc * nvir)[active_block]
+        eri_K = eri_K.reshape(nocc * nvir, nocc * nvir)[active_block]
+        a = a.reshape(nocc * nvir, nocc * nvir)
+        # Perturbative contrib. on P-CSF only
+        a[idx_pcsf, idx_pcsf] += e_ncsf
+        a = a[active_block]
+
+        b = b.reshape(nocc * nvir, nocc * nvir)[active_block]
 
     a += eri_K * 2 - eri_J
 
-    return a, b, (idx_pcsf, pcsf, e_ncsf)
+    return a, b, (idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf)
 
 
 def direct_diagonalization(a, nstates=3):
@@ -417,9 +441,9 @@ class sTDA(TDMixin):
             tp=self.tp,
             mode=mode,
         )
-        self.idx_pcsf = active_space[0]
-        self.pcsf = active_space[1]
-        self.e_ncsf = active_space[2]
+        self.idx_pcsf, self.idx_scsf, self.idx_ncsf = active_space[0:3]
+        self.pcsf, self.scsf, self.ncsf = active_space[3:6]
+        self.e_ncsf = active_space[-1]
         self.e, x1 = direct_diagonalization(a, nstates=nstates)
         self.converged = [True]
 
@@ -434,10 +458,11 @@ class sTDA(TDMixin):
             # Here xi is [num P-CSF], we transform back to (nocc, nvir)
             xy = [(xi * np.sqrt(0.5), 0) for xi in x1.T]
             new_xy = []
+            active = np.concatenate((self.pcsf, self.scsf), axis=0)
             for x, y in xy:
                 new_x = np.zeros((nocc, nvir))
                 new_y = np.zeros((nocc, nvir))
-                new_x[self.pcsf[:, 0], self.pcsf[:, 1]] = x.copy()
+                new_x[active[:, 0], active[:, 1]] = x.copy()
                 new_xy.append((new_x, new_y))
             self.xy = new_xy
 
