@@ -329,6 +329,9 @@ class sTDA(TDMixin):
         self.e_max = e_max
         self.tp = tp
 
+        keys = set(('ax', 'alpha', 'beta', 'e_max', 'tp'))
+        self._keys = set(self.__dict__.keys()).union(keys)
+
     @property
     def ax(self):
         return self._ax
