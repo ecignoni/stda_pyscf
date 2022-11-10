@@ -247,7 +247,15 @@ def get_ab(
         e_ncsf = 0
     elif mode == "active":
         idx_pcsf, pcsf, e_ncsf = select_active_space(
-            mf, a=a, eri_J=eri_J, eri_K=eri_K, alpha=alpha, beta=beta, ax=ax
+            mf,
+            a=a,
+            eri_J=eri_J,
+            eri_K=eri_K,
+            alpha=alpha,
+            beta=beta,
+            ax=ax,
+            e_max=e_max,
+            tp=tp,
         )
         pcsf_block = np.ix_(idx_pcsf, idx_pcsf)
         eri_J = eri_J.reshape(nocc * nvir, nocc * nvir)[pcsf_block]
@@ -329,7 +337,7 @@ class sTDA(TDMixin):
         self.e_max = e_max
         self.tp = tp
 
-        keys = set(('ax', 'alpha', 'beta', 'e_max', 'tp'))
+        keys = set(("ax", "alpha", "beta", "e_max", "tp"))
         self._keys = set(self.__dict__.keys()).union(keys)
 
     @property
