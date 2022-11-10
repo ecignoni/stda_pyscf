@@ -406,7 +406,7 @@ class sTDA(TDMixin):
         log = logger.new_logger(self, verbose)
         log.info("Davidson diagonalization currently not supported by sTDA.")
         log.info(
-            "'conv_tol', 'eigh lindep', 'eigh level_shift', 'eigh max_space'. and 'eigh max_cycle' currently not used."
+            "'conv_tol', 'eigh lindep', 'eigh level_shift', 'eigh max_space'. and 'eigh max_cycle' are ignored."
         )
         log.info("")
         log.info("******** sTDA specific parameters ********")
