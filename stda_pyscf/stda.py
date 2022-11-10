@@ -156,7 +156,7 @@ def _select_active_space(a, eri_J, eri_K, e_max, tp):
 
     # (3) Get perturbative contribution to sum to P-CSF
     a_uv = 2 * eri_K[idx_ncsf] - eri_J[idx_ncsf]
-    denom = denom[e_u<tp]
+    denom = denom[e_u < tp]
     e_pt = np.divide(
         np.abs(a_uv) ** 2,
         denom,
@@ -247,14 +247,14 @@ def get_ab(
     eri_J, eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax, mode="stda")
 
     ## TEST BENZENE
-    #mask_occ = np.where(mo_energy[occidx]>(-23.0707)/AU_TO_EV)[0]
-    #mask_vir = np.where(mo_energy[viridx]<16.4279/AU_TO_EV)[0]
-    #nocc = len(mask_occ)
-    #nvir = len(mask_vir)
-    #a = a[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
-    #b = b[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
-    #eri_J = eri_J[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
-    #eri_K = eri_K[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
+    # mask_occ = np.where(mo_energy[occidx]>(-23.0707)/AU_TO_EV)[0]
+    # mask_vir = np.where(mo_energy[viridx]<16.4279/AU_TO_EV)[0]
+    # nocc = len(mask_occ)
+    # nvir = len(mask_vir)
+    # a = a[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
+    # b = b[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
+    # eri_J = eri_J[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
+    # eri_K = eri_K[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
 
     if mode == "full":
         idx_pcsf = np.arange(nocc * nvir)
@@ -416,6 +416,12 @@ class sTDA(TDMixin):
         log.info("e_max = %g (eV), %g (a.u.)", self.e_max, self.e_max / AU_TO_EV)
         log.info("tp = %g (a.u.)", self.tp)
 
+    def parse_active_space(self, active_space):
+        self.idx_pcsf, self.idx_scsf, self.idx_ncsf = active_space[0:3]
+        self.pcsf, self.scsf, self.ncsf = active_space[3:6]
+        self.e_ncsf = active_space[-1]
+        return self
+
     def kernel(self, nstates=None, mode="active"):
         """sTDA diagonalization solver"""
         cpu0 = (logger.process_clock(), logger.perf_counter())
@@ -431,9 +437,8 @@ class sTDA(TDMixin):
 
         log = logger.Logger(self.stdout, self.verbose)
 
-        mf = self._scf
-        a, _, active_space = get_ab(
-            mf,
+        a, b, active_space = get_ab(
+            self._scf,
             alpha=self.alpha,
             beta=self.beta,
             ax=self.ax,
@@ -441,9 +446,7 @@ class sTDA(TDMixin):
             tp=self.tp,
             mode=mode,
         )
-        self.idx_pcsf, self.idx_scsf, self.idx_ncsf = active_space[0:3]
-        self.pcsf, self.scsf, self.ncsf = active_space[3:6]
-        self.e_ncsf = active_space[-1]
+        self.parse_active_space(active_space)
         self.e, x1 = direct_diagonalization(a, nstates=nstates)
         self.converged = [True]
 
