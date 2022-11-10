@@ -279,44 +279,43 @@ def direct_diagonalization(a, nstates=3):
     return e, v
 
 
-def _contract_multipole_active(tdobj, ints, hermi=True, xy=None):
-    if xy is None:
-        xy = tdobj.xy
-    mo_coeff = tdobj._scf.mo_coeff
-    mo_occ = tdobj._scf.mo_occ
-    orbo = mo_coeff[:, mo_occ == 2]
-    orbv = mo_coeff[:, mo_occ == 0]
-    nocc = orbo.shape[1]
-    nvir = orbv.shape[1]
+# def _contract_multipole_active(tdobj, ints, hermi=True, xy=None):
+#    if xy is None:
+#        xy = tdobj.xy
+#    mo_coeff = tdobj._scf.mo_coeff
+#    mo_occ = tdobj._scf.mo_occ
+#    orbo = mo_coeff[:, mo_occ == 2]
+#    orbv = mo_coeff[:, mo_occ == 0]
+#    nocc = orbo.shape[1]
+#    nvir = orbv.shape[1]
+#
+#    nstates = len(xy)
+#    pol_shape = ints.shape[:-2]
+#    nao = ints.shape[-1]
+#
+#    ints = lib.einsum(
+#        "xpq,pi,qj->xij", ints.reshape(-1, nao, nao), orbo.conj(), orbv
+#    )  # [:, nocc, nvir]
+#    ints = ints.reshape(ints.shape[0], nocc * nvir)  # [:, nocc*nvir]
+#    ints = ints[:, tdobj.idx_pcsf]  # [:, num P-CSF]
+#    pol = np.array([np.einsum("xp,p->x", ints, x) * 2 for x, y in xy])
+#    if isinstance(xy[0][1], np.ndarray):
+#        if hermi:
+#            pol += [np.einsum("xp,p->x", ints, y) * 2 for x, y in xy]
+#        else:
+#            pol -= [np.einsum("xp,p->x", ints, y) * 2 for x, y in xy]
+#    pol = pol.reshape((tdobj.nstates,) + pol_shape)
+#    return pol
 
-    nstates = len(xy)
-    pol_shape = ints.shape[:-2]
-    nao = ints.shape[-1]
-
-    ints = lib.einsum(
-        "xpq,pi,qj->xij", ints.reshape(-1, nao, nao), orbo.conj(), orbv
-    )  # [:, nocc, nvir]
-    ints = ints.reshape(ints.shape[0], nocc * nvir)  # [:, nocc*nvir]
-    ints = ints[:, tdobj.idx_pcsf]  # [:, num P-CSF]
-    pol = np.array([np.einsum("xp,p->x", ints, x) * 2 for x, y in xy])
-    if isinstance(xy[0][1], np.ndarray):
-        if hermi:
-            pol += [np.einsum("xp,p->x", ints, y) * 2 for x, y in xy]
-        else:
-            pol -= [np.einsum("xp,p->x", ints, y) * 2 for x, y in xy]
-    pol = pol.reshape((tdobj.nstates,) + pol_shape)
-    return pol
-
-
-def _contract_multipole(tdobj, ints, hermi=True, xy=None):
-    if tdobj.mode == "full":
-        # xy is in the same format of pyscf: delegate
-        return tdscf.rhf._contract_multipole(tdobj, ints, hermi=hermi, xy=xy)
-    elif tdobj.mode == "active":
-        # x is [num_PCSF], use different contraction method
-        return _contract_multipole_active(tdobj, ints, hermi=hermi, xy=xy)
-    else:
-        raise RuntimeError(f"mode is either 'full' or 'active', given {mode}")
+# def _contract_multipole(tdobj, ints, hermi=True, xy=None):
+#    if tdobj.mode == "full":
+#        # xy is in the same format of pyscf: delegate
+#        return tdscf.rhf._contract_multipole(tdobj, ints, hermi=hermi, xy=xy)
+#    elif tdobj.mode == "active":
+#        # x is [num_PCSF], use different contraction method
+#        return _contract_multipole_active(tdobj, ints, hermi=hermi, xy=xy)
+#    else:
+#        raise RuntimeError(f"mode is either 'full' or 'active', given {mode}")
 
 
 class sTDA(TDMixin):
@@ -382,8 +381,6 @@ class sTDA(TDMixin):
         log.info("e_max = %g (eV), %g (a.u.)", self.e_max, self.e_max / AU_TO_EV)
         log.info("tp = %g (a.u.)", self.tp)
 
-    _contract_multipole = _contract_multipole
-
     def kernel(self, nstates=None, mode="active"):
         """sTDA diagonalization solver"""
         cpu0 = (logger.process_clock(), logger.perf_counter())
@@ -415,24 +412,27 @@ class sTDA(TDMixin):
         self.e, x1 = direct_diagonalization(a, nstates=nstates)
         self.converged = [True]
 
+        nocc = (self._scf.mo_occ > 0).sum()
+        nmo = self._scf.mo_occ.size
+        nvir = nmo - nocc
+
         if mode == "full":
-            nocc = (self._scf.mo_occ > 0).sum()
-            nmo = self._scf.mo_occ.size
-            nvir = nmo - nocc
             # 1/sqrt(2) because self.x is for alpha excitation amplitude and 2(X^+*X) = 1
             self.xy = [(xi.reshape(nocc, nvir) * np.sqrt(0.5), 0) for xi in x1.T]
         elif mode == "active":
-            self.xy = [(xi * np.sqrt(0.5), 0) for xi in x1.T]
-            # Maybe it's better if __here__ you transform xi as shape (occ, vir), and use PySCF
-            # functions directly
+            # Here xi is [num P-CSF], we transform back to (nocc, nvir)
+            xy = [(xi * np.sqrt(0.5), 0) for xi in x1.T]
+            new_xy = []
+            for x, y in xy:
+                new_x = np.zeros((nocc, nvir))
+                new_y = np.zeros((nocc, nvir))
+                new_x[self.pcsf[:, 0], self.pcsf[:, 1]] = x.copy()
+                new_xy.append((new_x, new_y))
+            self.xy = new_xy
 
         if self.chkfile:
             lib.chkfile.save(self.chkfile, "tddft/e", self.e)
             lib.chkfile.save(self.chkfile, "tddft/xy", self.xy)
-
-        ## Remove me
-        # self.mode = 'active'
-        # self.xy = [(x.reshape(-1), 0) for x, y in self.xy]
 
         log.timer("sTDA", *cpu0)
         self._finalize()
