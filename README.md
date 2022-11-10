@@ -2,6 +2,8 @@
 
 Tiny implementation of the simplified Tamm-Dancoff Approximation ([sTDA](https://github.com/grimme-lab/stda))[1, 2] in [PySCF](https://pyscf.org/).
 
+*NOTE*: current implementation does not trim MOs at the beginning, at variance with the original sTDA code.
+
 **References**
 
 [1] Grimme, Stefan. "A simplified Tamm-Dancoff density functional approach for the electronic excitation spectra of very large molecules." The Journal of chemical physics 138.24 (2013): 244104.
