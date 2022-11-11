@@ -135,7 +135,15 @@ def _select_active_space(a, eri_J, eri_K, e_max, tp):
     # Select P-CSF and N-CSF
     idx_pcsf = np.where(diag_a <= e_max)[0]
     idx_ncsf = np.where(diag_a > e_max)[0]
-    pcsf = np.concatenate([[divmod(i, nvir)] for i in idx_pcsf])
+    try:
+        pcsf = np.concatenate([[divmod(i, nvir)] for i in idx_pcsf])
+    except ValueError as e:
+        if idx_pcsf.size == 0:
+            errmsg = 'No CSF below the energy threshold,'
+            errmsg += ' you may want to increase it'
+            raise ValueError(errmsg) from None
+        else:
+            raise e
 
     # (2) select the S-CSFs by perturbation
     eri_J = eri_J[:, :, pcsf[:, 0], pcsf[:, 1]].reshape(nocc * nvir, pcsf.shape[0])
