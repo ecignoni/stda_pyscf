@@ -1,4 +1,4 @@
-import itertools
+import sys
 import numpy as np
 from scipy.spatial.distance import cdist
 from pyscf.lo import lowdin
@@ -123,7 +123,13 @@ def eri_mo_monopole(mf, alpha=None, beta=None, ax=None, mode="full"):
     return eri_J, eri_K
 
 
-def _select_active_space(a, eri_J, eri_K, e_max, tp):
+def _select_active_space(a, eri_J, eri_K, e_max, tp, verbose=None):
+
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
+
     nocc, nvir, _, _ = a.shape
 
     # (1) select the CSFs by energy
@@ -145,6 +151,9 @@ def _select_active_space(a, eri_J, eri_K, e_max, tp):
         else:
             raise e
 
+    log.info('%d CSF included by energy' % len(idx_pcsf))
+    log.info('%d considered in PT2' % len(idx_ncsf))
+
     # (2) select the S-CSFs by perturbation
     eri_J = eri_J[:, :, pcsf[:, 0], pcsf[:, 1]].reshape(nocc * nvir, pcsf.shape[0])
     eri_K = eri_K[:, :, pcsf[:, 0], pcsf[:, 1]].reshape(nocc * nvir, pcsf.shape[0])
@@ -161,6 +170,9 @@ def _select_active_space(a, eri_J, eri_K, e_max, tp):
     idx_ncsf = idx_ncsf[e_u < tp]
     scsf = np.concatenate([[divmod(i, nvir)] for i in idx_scsf])
     ncsf = np.concatenate([[divmod(i, nvir)] for i in idx_ncsf])
+
+    log.info('%d CSF included by PT' % len(idx_scsf))
+    log.info('%d CSF in total' % (len(idx_scsf) + len(idx_pcsf)))
 
     # (3) Get perturbative contribution to sum to P-CSF
     a_uv = 2 * eri_K[idx_ncsf] - eri_J[idx_ncsf]
@@ -185,7 +197,9 @@ def select_active_space(
     alpha=None,
     beta=None,
     ax=None,
+    verbose=None,
 ):
+
     if a is None:
         mo_energy = mf.mo_energy
         mo_occ = mf.mo_occ
@@ -204,17 +218,24 @@ def select_active_space(
     e_max = e_max / AU_TO_EV
 
     idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf = _select_active_space(
-        a=a, eri_J=eri_J, eri_K=eri_K, e_max=e_max, tp=tp
+        a=a, eri_J=eri_J, eri_K=eri_K, e_max=e_max, tp=tp, verbose=verbose,
     )
 
     return idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf
 
 
-def screen_mo(mf, mo_energy=None, ax=None, e_max=7.0):
+def screen_mo(mf, mo_energy=None, ax=None, e_max=7.0, verbose=None):
     if mo_energy is None:
         mo_energy = mf.mo_energy
     if ax is None:
         ax = get_hybrid_coeff(mf)
+
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
+
+    log.info('%-40s = %15.8f' % ('spectral range up to (eV)', e_max))
 
     mo_occ = mf.mo_occ
     occidx = np.where(mo_occ == 2)[0]
@@ -223,6 +244,9 @@ def screen_mo(mf, mo_energy=None, ax=None, e_max=7.0):
     window = 2 * (1.0 + 0.8 * ax) * (e_max / AU_TO_EV)
     vthr = np.max(mo_energy[occidx]) + window
     othr = np.min(mo_energy[viridx]) - window
+
+    log.info('%-40s = %15.8f' % ('occ MO cut-off (eV)', othr * AU_TO_EV))
+    log.info('%-40s = %15.8f' % ('virtMO cut-off (eV)', vthr * AU_TO_EV))
 
     mask_occ = np.where(mo_energy[occidx] > othr)[0]
     mask_vir = np.where(mo_energy[viridx] < vthr)[0]
@@ -244,6 +268,7 @@ def get_ab(
     e_max=7.0,
     tp=1e-4,
     mode="active",
+    verbose=None,
 ):
     r"""A and B matrices for sTDA response function.
 
@@ -259,6 +284,11 @@ def get_ab(
     assert mo_coeff.dtype == np.double
     if mode != "active" and mode != "full":
         raise RuntimeError(f"mode is either 'full' or 'active', given '{mode}'")
+
+    if isinstance(verbose, logger.Logger):
+        log = verbose
+    else:
+        log = logger.Logger(sys.stdout, verbose)
 
     mol = mf.mol
     nao, nmo = mo_coeff.shape
@@ -285,13 +315,21 @@ def get_ab(
 
     elif mode == "active":
 
+        log.info('******** sTDA ********')
+
         # Screen MOs based on scaled energy gap
-        screen_mask = screen_mo(mf, ax=ax, e_max=e_max)
+        screen_mask = screen_mo(mf, ax=ax, e_max=e_max, verbose=log)
         a = a[screen_mask]
         b = b[screen_mask]
         eri_J = eri_J[screen_mask]
         eri_K = eri_K[screen_mask]
         nocc, nvir, _, _ = a.shape
+
+        log.info('%-40s = %15.8E' % ('perturbation thr', tp))
+        log.info('%-40s = F' % ('triplet'))
+        log.info('%s %12d' % ('MOs in TDA :', nocc+nvir))
+        log.info('%s %12d' % ('oMOs in TDA:', nocc))
+        log.info('%s %12d' % ('vMOs in TDA:', nvir))
 
         # MO selection based on energy (P-CSF) and perturbation theory (S-CSF, N-CSF)
         idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf = select_active_space(
@@ -304,6 +342,7 @@ def get_ab(
             ax=ax,
             e_max=e_max,
             tp=tp,
+            verbose=log,
         )
 
         # Reconstruct A, B in the set of active CSFs
@@ -446,6 +485,7 @@ class sTDA(TDMixin):
         log.info("beta = %s", self.beta)
         log.info("e_max = %g (eV), %g (a.u.)", self.e_max, self.e_max / AU_TO_EV)
         log.info("tp = %g (a.u.)", self.tp)
+        log.info('\n')
 
     def parse_active_space(self, active_space):
         self.idx_pcsf, self.idx_scsf, self.idx_ncsf = active_space[0:3]
@@ -476,6 +516,7 @@ class sTDA(TDMixin):
             e_max=self.e_max,
             tp=self.tp,
             mode=mode,
+            verbose=log,
         )
         self.parse_active_space(active_space)
         self.e, x1 = direct_diagonalization(a, nstates=nstates)
@@ -504,6 +545,7 @@ class sTDA(TDMixin):
             lib.chkfile.save(self.chkfile, "tddft/e", self.e)
             lib.chkfile.save(self.chkfile, "tddft/xy", self.xy)
 
+        log.info('\n')
         log.timer("sTDA", *cpu0)
         self._finalize()
         return self.e, self.xy
