@@ -202,6 +202,29 @@ def select_active_space(
     return idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf
 
 
+def screen_mo(mf, mo_energy=None, ax=None, e_max=7.0):
+    if mo_energy is None:
+        mo_energy = mf.mo_energy
+    if ax is None:
+        ax = get_hybrid_coeff(mf)
+
+    mo_occ = mf.mo_occ
+    occidx = np.where(mo_occ == 2)[0]
+    viridx = np.where(mo_occ == 0)[0]
+
+    window = 2 * (1.0 + 0.8 * ax) * (e_max / AU_TO_EV)
+    vthr = np.max(mo_energy[occidx]) + window
+    othr = np.min(mo_energy[viridx]) - window
+
+    mask_occ = np.where(mo_energy[occidx] > othr)[0]
+    mask_vir = np.where(mo_energy[viridx] < vthr)[0]
+    nocc = len(mask_occ)
+    nvir = len(mask_vir)
+    mask = np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)
+
+    return mask
+
+
 def get_ab(
     mf,
     mo_energy=None,
@@ -246,16 +269,6 @@ def get_ab(
 
     eri_J, eri_K = eri_mo_monopole(mf, alpha=alpha, beta=beta, ax=ax, mode="stda")
 
-    ## TEST BENZENE
-    # mask_occ = np.where(mo_energy[occidx]>(-23.0707)/AU_TO_EV)[0]
-    # mask_vir = np.where(mo_energy[viridx]<16.4279/AU_TO_EV)[0]
-    # nocc = len(mask_occ)
-    # nvir = len(mask_vir)
-    # a = a[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
-    # b = b[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
-    # eri_J = eri_J[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
-    # eri_K = eri_K[np.ix_(mask_occ, mask_vir, mask_occ, mask_vir)]
-
     if mode == "full":
         idx_pcsf = np.arange(nocc * nvir)
         idx_scsf = None
@@ -263,6 +276,16 @@ def get_ab(
         e_ncsf = 0
 
     elif mode == "active":
+
+        # Screen MOs based on scaled energy gap
+        screen_mask = screen_mo(mf, ax=ax, e_max=e_max)
+        a = a[screen_mask]
+        b = b[screen_mask]
+        eri_J = eri_J[screen_mask]
+        eri_K = eri_K[screen_mask]
+        nocc, nvir, _, _ = a.shape
+
+        # MO selection based on energy (P-CSF) and perturbation theory (S-CSF, N-CSF)
         idx_pcsf, idx_scsf, idx_ncsf, pcsf, scsf, ncsf, e_ncsf = select_active_space(
             mf,
             a=a,
