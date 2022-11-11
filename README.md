@@ -2,7 +2,6 @@
 
 Tiny implementation of the simplified Tamm-Dancoff Approximation ([sTDA](https://github.com/grimme-lab/stda))[1, 2] in [PySCF](https://pyscf.org/).
 
-*NOTE*: current implementation does not trim MOs at the beginning, at variance with the original sTDA code.
 
 **References**
 
